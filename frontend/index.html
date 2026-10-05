@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'">
+  <title>HMRC Self Assessment Tax Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --gov-blue: #1d70b8; --gov-dark: #0b0c0c; --gov-green: #00703c;
+      --gov-red: #d4351c; --gov-yellow: #ffdd00; --gov-light: #f3f2f1;
+      --gov-border: #b1b4b6; --white: #ffffff;
+    }
+    body { font-family: "GDS Transport", arial, sans-serif; background: var(--white); color: var(--gov-dark); font-size: 16px; }
+    header { background: var(--gov-dark); padding: 10px 20px; }
+    header .logo { color: var(--white); font-weight: 700; font-size: 18px; text-decoration: none; }
+    .phase-banner { background: var(--gov-yellow); padding: 6px 20px; font-size: 14px; }
+    .phase-banner strong { background: var(--gov-dark); color: var(--white); padding: 2px 6px; margin-right: 8px; font-size: 12px; }
+    nav { background: var(--gov-blue); }
+    nav a { color: var(--white); text-decoration: none; padding: 10px 20px; display: inline-block; font-size: 15px; }
+    nav a:hover { text-decoration: underline; }
+    .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 2rem; margin-bottom: 20px; border-bottom: 3px solid var(--gov-dark); padding-bottom: 10px; }
+    h2 { font-size: 1.4rem; margin: 20px 0 10px; }
+    h3 { font-size: 1.1rem; margin: 15px 0 8px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-weight: 700; margin-bottom: 5px; }
+    .hint { color: #505a5f; font-size: 14px; margin-bottom: 5px; }
+    input[type=text], input[type=email], input[type=password], input[type=number], select {
+      border: 2px solid var(--gov-dark); padding: 8px 10px; font-size: 16px;
+      width: 100%; max-width: 400px; display: block;
+    }
+    input:focus, select:focus { outline: 3px solid var(--gov-yellow); outline-offset: 0; }
+    .btn { display: inline-block; padding: 10px 20px; font-size: 16px; font-weight: 700;
+      cursor: pointer; border: 2px solid transparent; text-decoration: none; }
+    .btn-primary { background: var(--gov-green); color: var(--white); border-color: var(--gov-green); }
+    .btn-primary:hover { background: #005a30; }
+    .btn-secondary { background: var(--gov-light); color: var(--gov-dark); border-color: var(--gov-border); }
+    .btn-danger { background: var(--gov-red); color: var(--white); border-color: var(--gov-red); }
+    .btn + .btn { margin-left: 10px; }
+    .alert { padding: 15px; margin: 15px 0; border-left: 5px solid; }
+    .alert-error { border-color: var(--gov-red); background: #fdf2f0; }
+    .alert-success { border-color: var(--gov-green); background: #f0fdf4; }
+    .alert-info { border-color: var(--gov-blue); background: #eef4fb; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--gov-border); }
+    th { background: var(--gov-light); font-weight: 700; }
+    .tag { display: inline-block; padding: 2px 8px; font-size: 12px; font-weight: 700; border-radius: 3px; }
+    .tag-draft { background: var(--gov-light); color: #505a5f; }
+    .tag-submitted { background: #cce2d8; color: var(--gov-green); }
+    .tax-summary { background: var(--gov-light); padding: 20px; margin: 20px 0; }
+    .tax-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--gov-border); }
+    .tax-row:last-child { border-bottom: none; font-weight: 700; font-size: 1.1rem; }
+    .amount-positive { color: var(--gov-dark); }
+    .amount-due { color: var(--gov-red); font-weight: 700; }
+    .amount-refund { color: var(--gov-green); font-weight: 700; }
+    canvas { border: 1px solid var(--gov-border); display: block; margin: 15px 0; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+    .section-divider { border: none; border-top: 2px solid var(--gov-border); margin: 30px 0; }
+    .user-bar { background: var(--gov-blue); color: var(--white); padding: 6px 20px; font-size: 14px;
+      display: flex; justify-content: space-between; align-items: center; }
+    #app { min-height: 80vh; }
+    .hidden { display: none; }
+    .step-indicator { display: flex; gap: 10px; margin-bottom: 30px; }
+    .step { padding: 6px 14px; background: var(--gov-light); border: 2px solid var(--gov-border); font-size: 14px; }
+    .step.active { background: var(--gov-blue); color: var(--white); border-color: var(--gov-blue); }
+    .step.done { background: var(--gov-green); color: var(--white); border-color: var(--gov-green); }
+  </style>
+</head>
+<body>
+<header>
+  <a class="logo" href="/">HMRC Self Assessment</a>
+</header>
+<div class="phase-banner"><strong>BETA</strong> This is a demonstration service. Do not submit real tax information.</div>
+<div id="userBar" class="user-bar hidden">
+  <span id="userInfo"></span>
+  <span><a href="#" onclick="logout()" style="color:white">Sign out</a></span>
+</div>
+<nav id="mainNav" class="hidden">
+  <a href="#" onclick="navigate('/dashboard')">My Returns</a>
+  <a href="#" onclick="navigate('/new-return')">New Return</a>
+  <a href="#" onclick="navigate('/calculator')">Live Calculator</a>
+  <a href="#" id="adminLink" class="hidden" onclick="navigate('/admin')">Admin</a>
+</nav>
+
+<div class="container">
+  <div id="app"></div>
+</div>
+
+<script>
+'use strict';
+
+let accessToken = null;
+let currentUser = null;
+let csrfToken = null;
+
+async function apiRequest(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+    ...(csrfToken && options.method && options.method !== 'GET' ? { 'X-CSRF-Token': csrfToken } : {}),
+    ...options.headers,
+  };
+  const res = await fetch(`/api${path}`, { ...options, headers });
+  if (res.status === 401 && path !== '/auth/login') { logout(); return null; }
+  return res;
+}
+
+function fmt(n) {
+  return '£' + Number(n || 0).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+const routes = {};
+function navigate(path) {
+  history.pushState({}, '', path);
+  render(path);
+}
+window.addEventListener('popstate', () => render(location.pathname));
+
+function render(path) {
+  const handler = routes[path] || routes['/'];
+  document.getElementById('app').innerHTML = '';
+  handler();
+}
+
+function showUserBar() {
+  document.getElementById('userBar').classList.remove('hidden');
+  document.getElementById('mainNav').classList.remove('hidden');
+  document.getElementById('userInfo').textContent =
+    `Signed in as ${currentUser.username} (${currentUser.role})`;
+  if (['admin', 'accountant'].includes(currentUser.role)) {
+    document.getElementById('adminLink').classList.remove('hidden');
+  }
+}
+
+function hideUserBar() {
+  document.getElementById('userBar').classList.add('hidden');
+  document.getElementById('mainNav').classList.add('hidden');
+}
+
+function showAlert(container, type, msg) {
+  const el = document.createElement('div');
+  el.className = `alert alert-${type}`;
+  el.textContent = msg;
+  container.prepend(el);
+}
+
+// ── Login ────────────────────────────────────────────────────────────────────
+routes['/'] = routes['/login'] = function() {
+  if (accessToken) { navigate('/dashboard'); return; }
+  hideUserBar();
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <h1>Sign in to Self Assessment</h1>
+    <div id="loginAlert"></div>
+    <div class="form-group">
+      <label for="loginUser">Username</label>
+      <input type="text" id="loginUser" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label for="loginPass">Password</label>
+      <input type="password" id="loginPass" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()">Sign in</button>
+    <p style="margin-top:15px">No account? <a href="#" onclick="navigate('/register')">Register</a></p>
+    <hr class="section-divider">
+    <p class="hint">Demo accounts: alice / AlicePass1! &nbsp;|&nbsp; admin / AdminPass123!</p>
+  `;
+};
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const res = await apiRequest('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res) return;
+  const data = await res.json();
+  if (!res.ok) { showAlert(document.getElementById('loginAlert'), 'error', data.error || 'Login failed'); return; }
+  accessToken = data.access_token;
+  csrfToken = data.csrf_token;
+  const me = await apiRequest('/auth/me');
+  if (!me || !me.ok) return;
+  currentUser = await me.json();
+  showUserBar();
+  navigate('/dashboard');
+}
+
+// ── Register ─────────────────────────────────────────────────────────────────
+routes['/register'] = function() {
+  hideUserBar();
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <h1>Create an account</h1>
+    <div id="regAlert"></div>
+    <div class="form-group">
+      <label for="regUser">Username</label>
+      <span class="hint">3–30 characters, letters, numbers and underscores only</span>
+      <input type="text" id="regUser" maxlength="30">
+    </div>
+    <div class="form-group">
+      <label for="regEmail">Email address</label>
+      <input type="email" id="regEmail">
+    </div>
+    <div class="form-group">
+      <label for="regPass">Password</label>
+      <span class="hint">At least 8 characters</span>
+      <input type="password" id="regPass" minlength="8">
+    </div>
+    <button class="btn btn-primary" onclick="doRegister()">Create account</button>
+    <p style="margin-top:15px"><a href="#" onclick="navigate('/login')">Back to sign in</a></p>
+  `;
+};
+
+async function doRegister() {
+  const username = document.getElementById('regUser').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const password = document.getElementById('regPass').value;
+  const res = await apiRequest('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ username, email, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = data.errors ? data.errors.map(e => e.msg).join('; ') : (data.error || 'Registration failed');
+    showAlert(document.getElementById('regAlert'), 'error', msg);
+    return;
+  }
+  showAlert(document.getElementById('regAlert'), 'success', 'Account created. Please sign in.');
+  setTimeout(() => navigate('/login'), 1500);
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+routes['/dashboard'] = async function() {
+  if (!accessToken) { navigate('/login'); return; }
+  const app = document.getElementById('app');
+  app.innerHTML = `<h1>My Tax Returns</h1><p>Loading…</p>`;
+  const res = await apiRequest('/tax/returns');
+  if (!res) return;
+  const returns = await res.json();
+  let rows = returns.length ? returns.map(r => `
+    <tr>
+      <td>${r.tax_year}</td>
+      <td><span class="tag tag-${r.status}">${r.status}</span></td>
+      <td>${fmt(r.employment_income)}</td>
+      <td><a href="#" onclick="viewReturn(${r.id})">View</a>
+          ${r.status === 'draft' ? `&nbsp;<a href="#" onclick="editReturn(${r.id})">Edit</a>` : ''}</td>
+    </tr>`).join('') : '<tr><td colspan="4">No returns filed yet.</td></tr>';
+  app.innerHTML = `
+    <h1>My Tax Returns</h1>
+    <button class="btn btn-primary" onclick="navigate('/new-return')">Start new return</button>
+    <table style="margin-top:20px">
+      <thead><tr><th>Tax Year</th><th>Status</th><th>Employment Income</th><th>Actions</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+};
+
+async function viewReturn(id) {
+  const res = await apiRequest(`/tax/returns/${id}`);
+  if (!res || !res.ok) return;
+  const data = await res.json();
+  const c = data.calculation;
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <h1>Tax Return — ${data.tax_year}</h1>
+    <p>Status: <span class="tag tag-${data.status}">${data.status}</span></p>
+    <hr class="section-divider">
+    <h2>Income Summary</h2>
+    <table>
+      <tr><td>Employment income</td><td>${fmt(data.employment_income)}</td></tr>
+      <tr><td>Self-employment profit</td><td>${fmt(data.self_employment_profit)}</td></tr>
+      <tr><td>Net rental income</td><td>${fmt(Math.max(0, data.rental_income - data.rental_expenses))}</td></tr>
+      <tr><td>Dividend income</td><td>${fmt(data.dividend_income)}</td></tr>
+      <tr><td>Savings interest</td><td>${fmt(data.savings_interest)}</td></tr>
+      <tr><td>Capital gains (net)</td><td>${fmt(Math.max(0, data.capital_gains - data.capital_losses))}</td></tr>
+    </table>
+    <h2>Tax Calculation</h2>
+    <div class="tax-summary">
+      <div class="tax-row"><span>Personal allowance</span><span>${fmt(c.personal_allowance)}</span></div>
+      <div class="tax-row"><span>Taxable income</span><span>${fmt(c.taxable_income)}</span></div>
+      <div class="tax-row"><span>Income tax</span><span>${fmt(c.income_tax)}</span></div>
+      <div class="tax-row"><span>Dividend tax</span><span>${fmt(c.dividend_tax)}</span></div>
+      <div class="tax-row"><span>Capital gains tax</span><span>${fmt(c.capital_gains_tax)}</span></div>
+      <div class="tax-row"><span>NI Class 2</span><span>${fmt(c.ni_class2)}</span></div>
+      <div class="tax-row"><span>NI Class 4</span><span>${fmt(c.ni_class4)}</span></div>
+      <div class="tax-row"><span>Total tax liability</span><span>${fmt(c.total_tax_liability)}</span></div>
+      <div class="tax-row"><span>Tax already paid (PAYE)</span><span>${fmt(c.tax_already_paid)}</span></div>
+      <div class="tax-row">
+        <span>${c.tax_due > 0 ? 'Tax due' : 'Refund due'}</span>
+        <span class="${c.tax_due > 0 ? 'amount-due' : 'amount-refund'}">
+          ${c.tax_due > 0 ? fmt(c.tax_due) : fmt(c.tax_refund)}
+        </span>
+      </div>
+    </div>
+    ${c.payment_on_account.required ? `
+      <div class="alert alert-info">
+        <strong>Payments on account required.</strong>
+        First payment: ${fmt(c.payment_on_account.first_payment)} due 31 January.
+        Second payment: ${fmt(c.payment_on_account.second_payment)} due 31 July.
+      </div>` : ''}
+    <canvas id="taxChart" width="500" height="250"></canvas>
+    ${data.status === 'draft' ? `<button class="btn btn-primary" onclick="submitReturn(${data.id})">Submit return</button>` : ''}
+    <button class="btn btn-secondary" onclick="navigate('/dashboard')" style="margin-left:10px">Back</button>
+  `;
+  drawTaxChart(c);
+}
+
+function drawTaxChart(c) {
+  const canvas = document.getElementById('taxChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const items = [
+    { label: 'Income Tax', value: c.income_tax, color: '#1d70b8' },
+    { label: 'Div Tax', value: c.dividend_tax, color: '#4c2c92' },
+    { label: 'CGT', value: c.capital_gains_tax, color: '#d4351c' },
+    { label: 'NI', value: c.ni_class2 + c.ni_class4, color: '#f47738' },
+  ].filter(i => i.value > 0);
+  if (!items.length) { ctx.fillText('No tax due', 10, 20); return; }
+  const total = items.reduce((s, i) => s + i.value, 0);
+  const maxVal = Math.max(...items.map(i => i.value));
+  const w = canvas.width - 120, h = canvas.height - 40, barW = Math.floor(w / items.length) - 10;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  items.forEach((item, idx) => {
+    const barH = Math.floor((item.value / maxVal) * (h - 30));
+    const x = 10 + idx * (barW + 10);
+    const y = h - barH + 10;
+    ctx.fillStyle = item.color;
+    ctx.fillRect(x, y, barW, barH);
+    ctx.fillStyle = '#0b0c0c';
+    ctx.font = '12px arial';
+    ctx.fillText(item.label, x, h + 25);
+    ctx.fillText('£' + Math.round(item.value).toLocaleString(), x, y - 5);
+  });
+}
+
+async function submitReturn(id) {
+  if (!confirm('Submit this return? It cannot be edited after submission.')) return;
+  const res = await apiRequest(`/tax/returns/${id}/submit`, { method: 'POST' });
+  if (res && res.ok) { navigate('/dashboard'); }
+}
+
+function editReturn(id) {
+  navigate('/edit-return/' + id);
+}
+
+// ── New Return (multi-step form) ───────────────────────────────────────────────
+let formData = {};
+let formStep = 1;
+
+routes['/new-return'] = function() {
+  if (!accessToken) { navigate('/login'); return; }
+  formData = {
+    tax_year: '2024-25', employment_income: 0, employment_tax_paid: 0,
+    self_employment_profit: 0, rental_income: 0, rental_expenses: 0,
+    dividend_income: 0, savings_interest: 0, capital_gains: 0, capital_losses: 0,
+    pension_contributions: 0, gift_aid_donations: 0, blind_persons_allowance: 0,
+  };
+  formStep = 1;
+  renderFormStep();
+};
+
+function renderFormStep() {
+  const app = document.getElementById('app');
+  const steps = ['Income', 'Deductions', 'Investments', 'Review'];
+  const stepHtml = steps.map((s, i) =>
+    `<div class="step ${formStep === i+1 ? 'active' : (formStep > i+1 ? 'done' : '')}">${i+1}. ${s}</div>`
+  ).join('');
+  let content = '';
+  if (formStep === 1) {
+    content = `
+      <h2>Step 1 — Employment & Self-Employment Income</h2>
+      <div class="two-col">
+        <div class="form-group">
+          <label>Tax Year</label>
+          <select id="f_tax_year">
+            <option value="2024-25" ${formData.tax_year==='2024-25'?'selected':''}>2024–25</option>
+            <option value="2023-24" ${formData.tax_year==='2023-24'?'selected':''}>2023–24</option>
+          </select>
+        </div>
+        <div></div>
+        <div class="form-group">
+          <label>Employment income (P60 figure)</label>
+          <span class="hint">Total pay from all employment</span>
+          <input type="number" id="f_employment_income" min="0" step="0.01" value="${formData.employment_income}">
+        </div>
+        <div class="form-group">
+          <label>Income tax already paid (PAYE)</label>
+          <span class="hint">From your P60 or P45</span>
+          <input type="number" id="f_employment_tax_paid" min="0" step="0.01" value="${formData.employment_tax_paid}">
+        </div>
+        <div class="form-group">
+          <label>Self-employment profit (or loss)</label>
+          <span class="hint">Net profit after allowable expenses</span>
+          <input type="number" id="f_self_employment_profit" step="0.01" value="${formData.self_employment_profit}">
+        </div>
+      </div>`;
+  } else if (formStep === 2) {
+    content = `
+      <h2>Step 2 — Property & Deductions</h2>
+      <div class="two-col">
+        <div class="form-group">
+          <label>Rental income</label>
+          <input type="number" id="f_rental_income" min="0" step="0.01" value="${formData.rental_income}">
+        </div>
+        <div class="form-group">
+          <label>Rental expenses</label>
+          <input type="number" id="f_rental_expenses" min="0" step="0.01" value="${formData.rental_expenses}">
+        </div>
+        <div class="form-group">
+          <label>Pension contributions</label>
+          <span class="hint">Personal contributions (not employer)</span>
+          <input type="number" id="f_pension_contributions" min="0" step="0.01" value="${formData.pension_contributions}">
+        </div>
+        <div class="form-group">
+          <label>Gift Aid donations</label>
+          <input type="number" id="f_gift_aid_donations" min="0" step="0.01" value="${formData.gift_aid_donations}">
+        </div>
+        <div class="form-group">
+          <label>Blind person's allowance</label>
+          <select id="f_blind_persons_allowance">
+            <option value="0" ${!formData.blind_persons_allowance?'selected':''}>No</option>
+            <option value="1" ${formData.blind_persons_allowance?'selected':''}>Yes</option>
+          </select>
+        </div>
+      </div>`;
+  } else if (formStep === 3) {
+    content = `
+      <h2>Step 3 — Dividends, Savings & Capital Gains</h2>
+      <div class="two-col">
+        <div class="form-group">
+          <label>Dividend income</label>
+          <span class="hint">£500 allowance applies automatically</span>
+          <input type="number" id="f_dividend_income" min="0" step="0.01" value="${formData.dividend_income}">
+        </div>
+        <div class="form-group">
+          <label>Savings interest</label>
+          <input type="number" id="f_savings_interest" min="0" step="0.01" value="${formData.savings_interest}">
+        </div>
+        <div class="form-group">
+          <label>Capital gains</label>
+          <span class="hint">£3,000 annual exemption applies automatically</span>
+          <input type="number" id="f_capital_gains" min="0" step="0.01" value="${formData.capital_gains}">
+        </div>
+        <div class="form-group">
+          <label>Capital losses</label>
+          <input type="number" id="f_capital_losses" min="0" step="0.01" value="${formData.capital_losses}">
+        </div>
+      </div>`;
+  } else {
+    const calc = previewCalc(formData);
+    content = `
+      <h2>Step 4 — Review &amp; Submit</h2>
+      <div class="tax-summary">
+        <div class="tax-row"><span>Tax year</span><span>${formData.tax_year}</span></div>
+        <div class="tax-row"><span>Total income</span><span>${fmt(+formData.employment_income + +formData.self_employment_profit + Math.max(0,formData.rental_income-formData.rental_expenses) + +formData.savings_interest)}</span></div>
+        <div class="tax-row"><span>Personal allowance</span><span>${fmt(calc.personal_allowance)}</span></div>
+        <div class="tax-row"><span>Income tax</span><span>${fmt(calc.income_tax)}</span></div>
+        <div class="tax-row"><span>Dividend tax</span><span>${fmt(calc.dividend_tax)}</span></div>
+        <div class="tax-row"><span>Capital gains tax</span><span>${fmt(calc.capital_gains_tax)}</span></div>
+        <div class="tax-row"><span>NI (Class 2 + 4)</span><span>${fmt(calc.ni_class2 + calc.ni_class4)}</span></div>
+        <div class="tax-row"><span>Tax already paid</span><span>${fmt(calc.tax_already_paid)}</span></div>
+        <div class="tax-row">
+          <span><strong>${calc.tax_due > 0 ? 'Tax due' : 'Refund'}</strong></span>
+          <span class="${calc.tax_due > 0 ? 'amount-due' : 'amount-refund'}">
+            <strong>${calc.tax_due > 0 ? fmt(calc.tax_due) : fmt(calc.tax_refund)}</strong>
+          </span>
+        </div>
+      </div>
+      <div id="submitAlert"></div>`;
+  }
+  app.innerHTML = `
+    <h1>New Self Assessment Return</h1>
+    <div class="step-indicator">${stepHtml}</div>
+    ${content}
+    <div style="margin-top:20px">
+      ${formStep > 1 ? '<button class="btn btn-secondary" onclick="formPrev()">Back</button>' : ''}
+      ${formStep < 4 ? '<button class="btn btn-primary" onclick="formNext()">Continue</button>' : ''}
+      ${formStep === 4 ? '<button class="btn btn-primary" onclick="saveReturn()">Save as draft</button>' : ''}
+      <button class="btn btn-secondary" onclick="navigate(\'/dashboard\')" style="margin-left:10px">Cancel</button>
+    </div>
+  `;
+}
+
+function collectStep() {
+  const get = id => { const el = document.getElementById(id); return el ? el.value : undefined; };
+  if (formStep === 1) {
+    formData.tax_year = get('f_tax_year') || formData.tax_year;
+    formData.employment_income = parseFloat(get('f_employment_income')) || 0;
+    formData.employment_tax_paid = parseFloat(get('f_employment_tax_paid')) || 0;
+    formData.self_employment_profit = parseFloat(get('f_self_employment_profit')) || 0;
+  } else if (formStep === 2) {
+    formData.rental_income = parseFloat(get('f_rental_income')) || 0;
+    formData.rental_expenses = parseFloat(get('f_rental_expenses')) || 0;
+    formData.pension_contributions = parseFloat(get('f_pension_contributions')) || 0;
+    formData.gift_aid_donations = parseFloat(get('f_gift_aid_donations')) || 0;
+    formData.blind_persons_allowance = parseInt(get('f_blind_persons_allowance')) || 0;
+  } else if (formStep === 3) {
+    formData.dividend_income = parseFloat(get('f_dividend_income')) || 0;
+    formData.savings_interest = parseFloat(get('f_savings_interest')) || 0;
+    formData.capital_gains = parseFloat(get('f_capital_gains')) || 0;
+    formData.capital_losses = parseFloat(get('f_capital_losses')) || 0;
+  }
+}
+
+function formNext() { collectStep(); formStep++; renderFormStep(); }
+function formPrev() { formStep--; renderFormStep(); }
+
+function previewCalc(data) {
+  // mirrors server-side logic for live preview
+  const pa_base = 12570 + (data.blind_persons_allowance ? 3070 : 0);
+  const totalInc = (+data.employment_income) + (+data.self_employment_profit) +
+    Math.max(0, (+data.rental_income) - (+data.rental_expenses)) + (+data.savings_interest);
+  let pa = pa_base;
+  if (totalInc > 100000) pa = Math.max(0, pa - Math.floor((totalInc - 100000) / 2));
+  const taxable = Math.max(0, totalInc - pa);
+  let it = 0;
+  if (taxable <= 37700) it = taxable * 0.20;
+  else if (taxable <= 112570) it = 37700 * 0.20 + (taxable - 37700) * 0.40;
+  else it = 37700 * 0.20 + 74870 * 0.40 + (taxable - 112570) * 0.45;
+  const taxDiv = Math.max(0, data.dividend_income - 500);
+  const divTax = taxDiv * 0.0875;
+  const netGains = Math.max(0, data.capital_gains - data.capital_losses - 3000);
+  const cgt = netGains * 0.10;
+  const ni2 = data.self_employment_profit > 12570 ? 3.45 * 52 : 0;
+  const ni4 = data.self_employment_profit > 12570 ?
+    (Math.min(data.self_employment_profit, 50270) - 12570) * 0.09 +
+    Math.max(0, data.self_employment_profit - 50270) * 0.02 : 0;
+  const total = it + divTax + cgt + ni2 + ni4;
+  const due = Math.max(0, total - data.employment_tax_paid);
+  return { personal_allowance: pa, income_tax: it, dividend_tax: divTax, capital_gains_tax: cgt,
+    ni_class2: ni2, ni_class4: ni4, tax_already_paid: +data.employment_tax_paid,
+    tax_due: due, tax_refund: Math.max(0, data.employment_tax_paid - total) };
+}
+
+async function saveReturn() {
+  collectStep();
+  const body = { ...formData };
+  for (const k of Object.keys(body)) {
+    if (k !== 'tax_year' && k !== 'blind_persons_allowance') body[k] = parseFloat(body[k]) || 0;
+    if (k === 'blind_persons_allowance') body[k] = parseInt(body[k]) || 0;
+  }
+  const res = await apiRequest('/tax/returns', { method: 'POST', body: JSON.stringify(body) });
+  if (!res) return;
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = data.errors ? data.errors.map(e => e.msg).join('; ') : (data.error || 'Save failed');
+    showAlert(document.getElementById('submitAlert'), 'error', msg);
+    return;
+  }
+  navigate('/dashboard');
+}
+
+// ── Live Calculator ────────────────────────────────────────────────────────────
+routes['/calculator'] = function() {
+  if (!accessToken) { navigate('/login'); return; }
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <h1>Live Tax Calculator</h1>
+    <p class="hint">Enter figures below — tax is calculated instantly without saving.</p>
+    <div class="two-col">
+      <div>
+        <h3>Income</h3>
+        <div class="form-group"><label>Employment income</label><input type="number" id="c_emp" min="0" value="0" oninput="liveCalc()"></div>
+        <div class="form-group"><label>Tax paid (PAYE)</label><input type="number" id="c_paye" min="0" value="0" oninput="liveCalc()"></div>
+        <div class="form-group"><label>Self-employment profit</label><input type="number" id="c_se" value="0" oninput="liveCalc()"></div>
+        <div class="form-group"><label>Rental income</label><input type="number" id="c_rent" min="0" value="0" oninput="liveCalc()"></div>
+        <div class="form-group"><label>Rental expenses</label><input type="number" id="c_rentex" min="0" value="0" oninput="liveCalc()"></div>
+        <div class="form-group"><label>Dividends</label><input type="number" id="c_div" min="0" value="0" oninput="liveCalc()"></div>
+        <div class="form-group"><label>Savings interest</label><input type="number" id="c_sav" min="0" value="0" oninput="liveCalc()"></div>
+        <div class="form-group"><label>Capital gains</label><input type="number" id="c_cg" min="0" value="0" oninput="liveCalc()"></div>
+        <div class="form-group"><label>Capital losses</label><input type="number" id="c_cl" min="0" value="0" oninput="liveCalc()"></div>
+      </div>
+      <div>
+        <h3>Tax Breakdown</h3>
+        <div id="calcResult" class="tax-summary"></div>
+        <canvas id="liveChart" width="380" height="220"></canvas>
+      </div>
+    </div>
+  `;
+  liveCalc();
+};
+
+async function liveCalc() {
+  const gv = id => parseFloat(document.getElementById(id)?.value) || 0;
+  const body = {
+    employment_income: gv('c_emp'), employment_tax_paid: gv('c_paye'),
+    self_employment_profit: gv('c_se'), rental_income: gv('c_rent'),
+    rental_expenses: gv('c_rentex'), dividend_income: gv('c_div'),
+    savings_interest: gv('c_sav'), capital_gains: gv('c_cg'),
+    capital_losses: gv('c_cl'), pension_contributions: 0,
+    gift_aid_donations: 0, blind_persons_allowance: 0,
+  };
+  const res = await apiRequest('/tax/calculate', { method: 'POST', body: JSON.stringify(body) });
+  if (!res || !res.ok) return;
+  const c = await res.json();
+  const el = document.getElementById('calcResult');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="tax-row"><span>Personal allowance</span><span>${fmt(c.personal_allowance)}</span></div>
+    <div class="tax-row"><span>Income tax</span><span>${fmt(c.income_tax)}</span></div>
+    <div class="tax-row"><span>Dividend tax</span><span>${fmt(c.dividend_tax)}</span></div>
+    <div class="tax-row"><span>CGT</span><span>${fmt(c.capital_gains_tax)}</span></div>
+    <div class="tax-row"><span>NI Class 2</span><span>${fmt(c.ni_class2)}</span></div>
+    <div class="tax-row"><span>NI Class 4</span><span>${fmt(c.ni_class4)}</span></div>
+    <div class="tax-row"><span>Total liability</span><span>${fmt(c.total_tax_liability)}</span></div>
+    <div class="tax-row"><span>PAYE paid</span><span>${fmt(c.tax_already_paid)}</span></div>
+    <div class="tax-row">
+      <span><strong>${c.tax_due > 0 ? 'Tax due' : 'Refund'}</strong></span>
+      <span class="${c.tax_due > 0 ? 'amount-due' : 'amount-refund'}">
+        <strong>${c.tax_due > 0 ? fmt(c.tax_due) : fmt(c.tax_refund)}</strong>
+      </span>
+    </div>`;
+  drawTaxChart2(c, 'liveChart');
+}
+
+function drawTaxChart2(c, canvasId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const items = [
+    { label: 'Income Tax', value: c.income_tax, color: '#1d70b8' },
+    { label: 'Div Tax', value: c.dividend_tax, color: '#4c2c92' },
+    { label: 'CGT', value: c.capital_gains_tax, color: '#d4351c' },
+    { label: 'NI', value: c.ni_class2 + c.ni_class4, color: '#f47738' },
+  ].filter(i => i.value > 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!items.length) { ctx.font = '13px arial'; ctx.fillText('No tax components', 10, 20); return; }
+  const maxVal = Math.max(...items.map(i => i.value));
+  const h = canvas.height - 40, barW = Math.floor((canvas.width - 20) / items.length) - 10;
+  items.forEach((item, idx) => {
+    const barH = Math.max(2, Math.floor((item.value / maxVal) * (h - 30)));
+    const x = 10 + idx * (barW + 10);
+    const y = h - barH + 10;
+    ctx.fillStyle = item.color;
+    ctx.fillRect(x, y, barW, barH);
+    ctx.fillStyle = '#0b0c0c';
+    ctx.font = '11px arial';
+    ctx.fillText(item.label, x, h + 25);
+    ctx.fillText('£' + Math.round(item.value).toLocaleString(), x, y - 3);
+  });
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+routes['/admin'] = async function() {
+  if (!accessToken || !['admin', 'accountant'].includes(currentUser?.role)) {
+    navigate('/dashboard'); return;
+  }
+  const app = document.getElementById('app');
+  app.innerHTML = '<h1>Admin Dashboard</h1><p>Loading…</p>';
+  const [usersRes, returnsRes] = await Promise.all([
+    apiRequest('/admin/users'),
+    apiRequest('/admin/returns'),
+  ]);
+  if (!usersRes || !returnsRes) return;
+  const users = await usersRes.json();
+  const returns = await returnsRes.json();
+  const userRows = users.map(u => `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.email}</td><td>${u.role}</td></tr>`).join('');
+  const retRows = returns.map(r => `<tr><td>${r.username}</td><td>${r.tax_year}</td><td><span class="tag tag-${r.status}">${r.status}</span></td><td>${fmt(r.employment_income)}</td></tr>`).join('');
+  app.innerHTML = `
+    <h1>Admin Dashboard</h1>
+    <h2>Users (${users.length})</h2>
+    <table><thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th></tr></thead><tbody>${userRows}</tbody></table>
+    <h2>All Tax Returns (${returns.length})</h2>
+    <table><thead><tr><th>User</th><th>Year</th><th>Status</th><th>Employment Income</th></tr></thead><tbody>${retRows}</tbody></table>
+  `;
+};
+
+function logout() {
+  if (accessToken) {
+    apiRequest('/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+  }
+  accessToken = null; currentUser = null; csrfToken = null;
+  hideUserBar();
+  navigate('/login');
+}
+
+render(location.pathname);
+</script>
+</body>
+</html>
